@@ -1,10 +1,13 @@
 #!/bin/bash
 
 # 版本信息
-VERSION="1.0.0"
-UPDATE_DATE="2025-07-30"
+VERSION="1.0.1"
+UPDATE_DATE="2025-08-08"
 
 # 更新日志
+# v1.0.1 (2025-08-08)
+# - 优化 Zone ID 获取方式：通过 API 自动获取，无需用户手动输入
+# - VPS 卸载增强：卸载时可选择是否一并卸载 Caddy，默认保留 Caddy
 # v1.0.0 (2025-07-30)
 # - 开箱即用的深度整合方案：从证书申请到HTTPS反代全程自动化，为HubProxy提供完整的Docker/宿主机双栈加速服务
 # - 支持VPS和Docker双方案部署
@@ -262,7 +265,7 @@ install_system_dependencies() {
 install_caddy() {
   # 检查 Caddy 是否已安装
   if command_exists caddy; then
-    CADDY_VERSION=$(caddy version | grep -o 'v[0-9.]*')
+    CADDY_VERSION=$(caddy version | awk 'NR==1 {print $1}')
     echo -e "${GREEN}Caddy 已安装，版本: $CADDY_VERSION${NC}"
     return 0
   fi
@@ -710,18 +713,9 @@ select_ip_address() {
   done
 }
 
-# 获取 Cloudflare API 信息
+# 获取 Cloudflare API 和域名信息
 get_cloudflare_info() {
   echo -e "${BLUE}请输入 Cloudflare API 信息:${NC}"
-
-  while [ -z "$CF_ZONE_ID" ]; do
-    read -p "Zone ID: " CF_ZONE_ID_INPUT
-    if [ -z "$CF_ZONE_ID_INPUT" ]; then
-      echo -e "${RED}Zone ID 不能为空${NC}"
-    else
-      CF_ZONE_ID="$CF_ZONE_ID_INPUT"
-    fi
-  done
 
   while [ -z "$CF_API_TOKEN" ]; do
     read -p "API Token: " CF_API_TOKEN_INPUT
@@ -742,6 +736,20 @@ get_cloudflare_info() {
   done
 }
 
+# 获取 Cloudflare Zone ID 信息
+get_cloudflare_zone_id() {
+  if [ "$FETCH_TOOL" == "curl" ]; then
+    CF_ZONE_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=${DOMAIN_NAME#*.}" \
+      -H "Authorization: Bearer ${CF_API_TOKEN}" \
+      -H "Content-Type: application/json" | jq -r '.result[0].id')
+  else
+    CF_ZONE_ID=$(wget -qO - \
+      --header="Authorization: Bearer ${CF_API_TOKEN}" \
+      --header="Content-Type: application/json" \
+      "https://api.cloudflare.com/client/v4/zones?name=${DOMAIN_NAME#*.}" | jq -r '.result[0].id')
+  fi
+}
+
 # 创建 DNS 记录（不启用代理）
 create_dns_record_without_proxy() {
   echo -e "${BLUE}正在创建 DNS 记录（不启用代理）...${NC}"
@@ -751,6 +759,9 @@ create_dns_record_without_proxy() {
   if validate_ipv6 "$SELECTED_IP"; then
     RECORD_TYPE="AAAA"
   fi
+
+  # 获取 Cloudflare 域名 ID
+  grep -q '^$' <<< "${CF_ZONE_ID}" && get_cloudflare_zone_id
 
   # 首先检查是否已存在同名记录
   echo -e "${BLUE}检查是否已存在同名 DNS 记录...${NC}"
@@ -1099,6 +1110,42 @@ uninstall_vps() {
     rm -rf "${TEMP_DIR}"
   fi
 
+  # 询问是否卸载 Caddy
+  echo -e "${BLUE}是否卸载 Caddy? (y/N, 默认为N): ${NC}"
+  read -r UNINSTALL_CADDY
+  if [[ "${UNINSTALL_CADDY}" =~ ^[Yy]$ ]]; then
+    echo -e "${BLUE}卸载 Caddy...${NC}"
+    detect_os
+    
+    if [ "$OS" == "debian" ] || [ "$OS" == "ubuntu" ] || [ "$OS" == "raspbian" ]; then
+      apt remove -y caddy &>/dev/null
+      rm -f /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+      rm -f /etc/apt/sources.list.d/caddy-stable.list
+    elif [ "$OS" == "fedora" ]; then
+      dnf remove -y caddy &>/dev/null
+      dnf copr disable -y @caddy/caddy &>/dev/null
+    elif [ "$OS" == "centos" ] || [ "$OS" == "rhel" ]; then
+      if [ "$OS_VERSION" == "7" ]; then
+        yum remove -y caddy &>/dev/null
+        yum copr disable -y @caddy/caddy &>/dev/null
+      else
+        dnf remove -y caddy &>/dev/null
+        dnf copr disable -y @caddy/caddy &>/dev/null
+      fi
+    elif [ "$OS" == "arch" ] || [ "$OS" == "manjaro" ] || [ "$OS" == "parabola" ]; then
+      pacman -R --noconfirm caddy &>/dev/null
+    fi
+    
+    # 删除 Caddy 配置文件
+    rm -f "$CADDYFILE"
+    rm -rf /etc/caddy
+    rm -rf /var/lib/caddy
+    
+    echo -e "${GREEN}Caddy 卸载完成${NC}"
+  else
+    echo -e "${GREEN}跳过 Caddy 卸载${NC}"
+  fi
+
   echo -e "${GREEN}VPS 方案卸载完成${NC}"
 }
 
@@ -1181,6 +1228,9 @@ EOF
 # 启用 Cloudflare 代理模式
 enable_cloudflare_proxy() {
   echo -e "${BLUE}启用 Cloudflare 代理模式...${NC}"
+
+  # 获取 Cloudflare 域名 ID
+  grep -q '^$' <<< "${CF_ZONE_ID}" && get_cloudflare_zone_id
 
   # 获取 DNS 记录 ID
   if [ "$FETCH_TOOL" == "curl" ]; then

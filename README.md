@@ -1,5 +1,6 @@
 # HubProxy
 本项目是一个轻量、高性能的代理部署脚本，支持一键搭建 Docker 镜像和 GitHub 文件加速服务。集成了 Cloudflare API、Caddy 和 HubProxy，实现自动配置与快速部署。
+
 # HubProxy 一键安装脚本
 
 🚀 **Docker 和 GitHub 加速代理服务器一键部署脚本**
@@ -16,9 +17,7 @@
 - [✨ 脚本特点](#-脚本特点)
 - [🎯 解决的问题](#-解决的问题)
 - [📥 安装](#-安装)
-- [🔐 Cloudflare API 凭据获取](#-cloudflare-api-凭据获取)
-  - [获取 Zone ID](#获取-zone-id)
-  - [创建 API Token](#创建-api-token)
+- [🔐 创建 Cloudflare API Token](#-创建-cloudflare-api-token)
 - [⚙️ 使用方法](#️-使用方法)
   - [安装过程](#安装过程)
   - [卸载过程](#卸载过程)
@@ -31,6 +30,8 @@
 - [⚠️ 免责声明](#️-免责声明)
 
 ## 📝 更新日志
+
+- **2025-08-08 v1.0.1** 1.优化 Zone ID 获取方式：通过 API 自动获取，无需用户手动输入; 2.VPS 卸载增强：卸载时可选择是否一并卸载 Caddy，默认保留 Caddy
 
 - **2025-07-30 v1.0.0** 1. 全自动化HTTPS解决方案：深度整合Caddy 2反向代理与Let's Encrypt证书自动签发，实现零配置的HTTPS服务部署; 2. 双模式智能部署：支持Docker容器化与宿主机原生部署，通过环境自适应的安装脚本自动选择最优方案
 
@@ -58,24 +59,17 @@
 
 ## 📥 安装
 
-```
+```bash
 bash <(curl -sSL https://raw.githubusercontent.com/fscarmen2/hubproxy/main/script.sh)
 ```
 或者
-```
+```bash
 bash <(wget -qO- https://raw.githubusercontent.com/fscarmen2/hubproxy/main/script.sh)
 ```
 
-## 🔐 Cloudflare API 凭据获取
+## 🔐 创建 Cloudflare API Token
 
-### 获取 Zone ID
-1. 登录 Cloudflare 控制台
-2. 选择您要使用的域名
-3. 在概述页面的右侧边栏中找到"API"部分
-4. Zone ID 显示在域名下方
-
-### 创建 API Token
-1. 在 Cloudflare 控制台右上角点击用户头像
+1. 在 Cloudflare 控制台右上角点击用户头像，或访问 https://dash.cloudflare.com/profile/api-tokens
 2. 选择"我的个人资料"
 3. 点击"API Tokens"选项卡
 4. 点击"创建令牌"
@@ -89,7 +83,6 @@ bash <(wget -qO- https://raw.githubusercontent.com/fscarmen2/hubproxy/main/scrip
 8. 点击"创建令牌"
 9. 复制生成的 API Token 并保存
 
-<img width="2874" height="1244" alt="image" src="https://github.com/user-attachments/assets/d263c020-c285-4627-8831-51424243d2f9" />
 
 <img width="2172" height="1064" alt="image" src="https://github.com/user-attachments/assets/886ecb04-e758-4a37-aaa0-3e9f4adbf624" />
 
@@ -103,17 +96,18 @@ bash <(wget -qO- https://raw.githubusercontent.com/fscarmen2/hubproxy/main/scrip
 
 脚本运行后会引导用户完成以下步骤：
 
-1. **选择部署方案** - 选择VPS方案或Docker方案
-2. **输入Cloudflare信息** - 输入Zone ID、API Token和域名
-3. **选择服务器IP** - 从检测到的IP地址中选择或输入自定义IP
+1. **选择部署方案** - 选择 VPS 方案或 Docker 方案
+2. **输入 Cloudflare 信息** - 输入 API Token 和域名（无需 Zone ID）
+3. **选择服务器 IP** - 从检测到的 IP 地址中选择或输入自定义 IP
 4. **自动部署** - 脚本会自动完成以下操作：
    - 安装系统依赖
-   - 创建DNS记录
-   - 安装和配置Caddy
-   - 部署HubProxy服务
+   - 自动获取 Zone ID
+   - 创建 DNS 记录
+   - 安装和配置 Caddy
+   - 部署 HubProxy 服务
    - 配置反向代理
-   - 启用Cloudflare代理
-   - 等待SSL证书生成
+   - 启用 Cloudflare 代理
+   - 等待 SSL 证书生成
 
 ### 卸载过程
 
@@ -149,9 +143,9 @@ Docker方案使用Docker Compose部署HubProxy和Caddy：
 
 ### 部署及 itdog 多地 ping 截图
 
-<img width="1744" height="1340" alt="image" src="https://github.com/user-attachments/assets/b0a204fb-d4f1-423e-8e53-a21aaccf592c" />
+<img width="1726" height="1496" alt="image" src="https://github.com/user-attachments/assets/6e63da68-376b-4256-a887-35efb474793a" />
 
-<img width="566" height="151" alt="image" src="https://github.com/user-attachments/assets/29e02454-7aa6-4ae2-bf64-b5fd6e43ad41" />
+<img width="1676" height="1108" alt="image" src="https://github.com/user-attachments/assets/9a051033-0ec7-434e-8b8f-dc7f58b5f1e9" />
 
 <img width="2030" height="1424" alt="image" src="https://github.com/user-attachments/assets/89c51128-68bc-4442-8ed8-ea261646f822" />
 
@@ -173,9 +167,8 @@ Docker方案使用Docker Compose部署HubProxy和Caddy：
 
 脚本会自动配置大部分参数，用户只需提供以下信息：
 
-1. **Cloudflare Zone ID** - 在Cloudflare仪表板的域名设置中找到
-2. **Cloudflare API Token** - 具有DNS记录编辑权限的API令牌
-3. **域名** - 用于访问HubProxy服务的域名
+1. **Cloudflare API Token** - 具有DNS记录编辑权限的API令牌
+2. **域名** - 用于访问HubProxy服务的域名
 
 ## ⚠️ 免责声明
 
